@@ -168,11 +168,19 @@ public class GroupChatActivityTest extends Activity implements OnClickListener, 
                 Log.d(TAG,"click startRecording");
                 break;
             case "stopPWM":
-                mRecorder.stopRecord();
+                if (mRecorder != null){
+                    mRecorder.stopRecord();
+                }else {
+                    Toast.makeText(this,"请先录音",Toast.LENGTH_SHORT).show();
+                }
                 Log.d(TAG,"click stopRecord");
                 break;
             case "deleteFile":
-                mRecorder.deleteFile();
+                if (mRecorder != null){
+                    mRecorder.deleteFile();
+                }else {
+                    Toast.makeText(this,"请先录音",Toast.LENGTH_SHORT).show();
+                }
                 Log.d(TAG,"click deleteFile");
                 break;
             case "sendBack":

@@ -87,7 +87,7 @@ public class SocketClient {
                                 in = new BufferedReader(new InputStreamReader(client.getInputStream()));
                                 String getSMsg = in.readLine();
                                 Log.i(TAG, "into acceptMsg()  SMsg =" + getSMsg);
-                                if(getSMsg != null ) {
+                                if(getSMsg != null) {
                                     //callback
                                 	mClientMsgListener.handlerHotMsg(getSMsg);
                                 }
