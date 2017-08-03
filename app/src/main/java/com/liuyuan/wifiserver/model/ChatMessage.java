@@ -1,15 +1,12 @@
 
 package com.liuyuan.wifiserver.model;
 
-/**
- * 
- * @Description: TODO(chat message model) 
- * @author Snail  (Zhanghf QQ:651555765)
- * @date 2014-5-9 下午6:05:39 
- * @version V1.0
- */
+
+import com.google.gson.Gson;
+
 public class ChatMessage {
     private String netAddress;
+    private int order;
     private String msg;
     private String deviceName;
     private String msgTime;
@@ -21,8 +18,8 @@ public class ChatMessage {
         return netAddress;
     }
 
-    public void setNetAddress(String netAddress) {
-        this.netAddress = netAddress;
+    public int getOrder() {
+        return order;
     }
 
     public String getMsg() {
@@ -43,6 +40,15 @@ public class ChatMessage {
 
     public String getFormat() {
         return format;
+    }
+
+
+    public void setNetAddress(String netAddress) {
+        this.netAddress = netAddress;
+    }
+
+    public void setOrder(int order) {
+        this.order = order;
     }
 
     public void setMsg(String msg) {
@@ -68,7 +74,7 @@ public class ChatMessage {
     @Override
     public String toString() {
         return "ChatMessage [netAddress=" + netAddress + ", msg=" + msg + ", deviceName="
-                + deviceName + ", msgTime=" + msgTime + "]";
+                + deviceName + ", msgTime=" + msgTime +"]";
     }
 
 }

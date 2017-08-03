@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * 
- * @Description: TODO(Wifi Hotpot list Adapter)
+ * @Description: TODO(WifiMng Hotpot list Adapter)
  * @version V1.0
  */
 public class WifiHotAdapter extends BaseAdapter {

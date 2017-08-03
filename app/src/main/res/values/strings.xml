@@ -5,9 +5,10 @@
     <string name="scaning">正在搜索可用wifi…</string>
     <string name="list_title">WIFI列表</string>
     <string name="connect_succeed">连接成功！进入聊天室！</string>
-    <string name="connect_failed">连接接失败！点击再次连接！</string>
+    <string name="connect_failed">连接失败！点击再次连接！</string>
 
     <string name="creating">稍等片刻，热点正在创建…</string>
     <string name="create_failed">热点创建失败！点击再次创建！</string>
+    <string name="create_succeed">热点创建成功，正在等待连接...</string>
 
 </resources>

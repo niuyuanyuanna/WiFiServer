@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:weightSum="1"
-    tools:context="com.liuyuan.wifiserver.GroupChatActivityTest">
+    tools:context="com.liuyuan.wifiserver.ServerActivity">
 
     <Button
         android:id="@+id/btn_refresh"

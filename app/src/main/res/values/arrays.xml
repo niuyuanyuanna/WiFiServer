@@ -8,9 +8,6 @@
         <item>44100</item>
         <item>47250</item>
         <item>48000</item>
-        <item>50000</item>
-        <item>96000</item>
-        <item>192000</item>
     </string-array>
     <string-array name="format">
         <item>amr</item>

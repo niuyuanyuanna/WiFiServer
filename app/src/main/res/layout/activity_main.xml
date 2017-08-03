@@ -1,49 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    tools:context="com.liuyuan.wifihottest.MainActivity"
-    android:weightSum="1">
-
-    <TextView
-        android:id="@+id/tv_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="5dp"
-        android:text="WIFI列表"
-        android:textSize="20sp" />
-
-    <ListView
-        android:id="@+id/listHots"
+    tools:context="com.liuyuan.wifiserver.MainActivity">
+    <Button
+        android:id="@+id/btn_server"
         android:layout_width="wrap_content"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-    <Button
-        android:id="@+id/btn_scan"
-        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="5dp"
-        android:layout_marginEnd="5dp"
-        android:text="搜索热点" />
-
+        android:text="服务器"
+        android:layout_above="@+id/btn_client"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="50dp" />
     <Button
-        android:id="@+id/btn_create"
-        android:layout_width="match_parent"
+        android:id="@+id/btn_client"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="5dp"
-        android:layout_marginEnd="5dp"
-        android:text="创建热点" />
+        android:text="客户端"
+        android:layout_alignParentBottom="true"
+        android:layout_alignLeft="@+id/btn_server"
+        android:layout_alignStart="@+id/btn_server"
+        android:layout_marginBottom="220dp" />
 
-
-    <Button
-        android:id="@+id/btn_gotochat"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="5dp"
-        android:layout_marginEnd="5dp"
-        android:layout_marginBottom="5dp"
-        android:text="进入聊天室" />
-
-</LinearLayout>
+</RelativeLayout>

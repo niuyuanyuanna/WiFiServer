@@ -2,6 +2,8 @@
 package com.liuyuan.wifiserver;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -12,63 +14,85 @@ import android.view.View.OnClickListener;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.Spinner;
-import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.liuyuan.wifiserver.adapter.ChatAdapter;
 import com.liuyuan.wifiserver.model.ChatMessage;
+import com.liuyuan.wifiserver.model.FileInfo;
 import com.liuyuan.wifiserver.p2p.GameServer.ServerMsgListener;
-import com.liuyuan.wifiserver.p2p.SocketClient.ClientMsgListener;
-import com.liuyuan.wifiserver.recorder.Recorder;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GroupChatActivityTest extends Activity implements OnClickListener, AdapterView.OnItemSelectedListener {
+public class ServerActivity extends Activity implements OnClickListener, AdapterView.OnItemSelectedListener {
 
-    private static final String TAG = GroupChatActivityTest.class.getSimpleName();
+    private static final String TAG = ServerActivity.class.getSimpleName();
+
+    //服务器发送开始录音指令
+    public static final int MSG_ORDER_START_RECORD = 0x661;
+    //服务器发送停止录音指令
+    public static final int MSG_ORDER_STOP_RECORD = 0x662;
+    //服务器发送删除录音指令
+    public static final int MSG_ORDER_DELETE_RECORD_FILE = 0x663;
+    //服务器发送录音文件指令
+    public static final int MSG_ORDER_START_SEND_BACK = 0x664;
+    //客户端开始发送录音文件信息指令
+    public static final int MSG_START_SEND_FILEINFO_BACK = 0x665;
+    //服务器发送开始发送录音文件指令
+    public static final int MSG_ORDER_START_SEND_FILE_BACK = 0x666;
+    //客户端发送录音文件成功
+    public static final int MSG_SEND_FILE_SUCCEECE = 0x667;
+    //客户端发送录音文件失败
+    public static final int MSG_SEND_FILE_FAILED = 0x668;
+    //服务器接收录音文件成功
+    public static final int MSG_ORDER_RECEIVE_FILE_SUCCEECE = 0x669;
+    //服务器接收录音文件失败
+    public static final int MSG_ORDER_RECEIVE_FILE_FAILED = 0x670;
+
 
     private ListView mLvMsgs;
     private Spinner spFrequency;
     private Spinner spFormat;
+    private Context context;
 
     private ChatAdapter adapter;
     public List<ChatMessage> chatMessages = new ArrayList<ChatMessage>();
     
     private String deviceName;
-    private String deviceIp;
+    private String serverIp;
+    private int order;
     
     private Handler serverHandler;
-    private Handler clientHandler;
     private WifiApplication app;
     private Gson gson;
 
-    //录音机
-    private Recorder mRecorder;
     //录音机频率
     private int mServerFrequency;
     //录音格式
     private String mServerFormat ;
+    //录音文件信息
+    private FileInfo mFileInfo;
+    //接收到的文件信息列表
+    public  List<FileInfo> fileInfoList = new ArrayList<FileInfo>();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.actiivty_groupchat);
         initUi();
-        
+
+        Intent intent = getIntent();
+        serverIp = intent.getStringExtra("serverIp");
+
         deviceName = new Build().MODEL;
-        deviceIp = "192.168.43.1";
         app = (WifiApplication) this.getApplication();
         initServerHandler();
-        initClientHandler();
-        
         initServerListener();
-        initClientListener();
-
     }
     
     private void initUi() {
+        context = this;
         mLvMsgs = (ListView) this.findViewById(R.id.lv_chat);
         spFrequency = (Spinner) findViewById(R.id.sp_frequency);
         spFormat = (Spinner) findViewById(R.id.sp_format);
@@ -76,7 +100,6 @@ public class GroupChatActivityTest extends Activity implements OnClickListener, 
         spFrequency.setOnItemSelectedListener(this);
         spFormat.setOnItemSelectedListener(this);
 
-        findViewById(R.id.btn_refresh).setOnClickListener(this);
         findViewById(R.id.btn_starPWM).setOnClickListener(this);
         findViewById(R.id.btn_stopPWM).setOnClickListener(this);
         findViewById(R.id.btn_delet).setOnClickListener(this);
@@ -118,82 +141,53 @@ public class GroupChatActivityTest extends Activity implements OnClickListener, 
         serverHandler = new Handler() {
             @Override
             public void handleMessage(Message msg) {
-                Log.d(TAG, "into initServerHandler() handleMessage(Message msg)");
+                Log.i(TAG, "into initServerHandler() handleMessage(Message msg)");
                 String text = (String) msg.obj;
-                sendChatMsg(text);
+//                sendChatMsg(text);
                 gson = new Gson();
                 ChatMessage chatMsg = gson.fromJson(text, ChatMessage.class);
                 chatMessages.add(chatMsg);
                 adapter.refreshDeviceList(chatMessages);
-                Log.d(TAG, "into initServerHandler() handleMessage(Message msg) chatMessage = " + chatMsg);
+                serverOperation(chatMsg);
+                Log.d(TAG, "out initServerHandler() handleMessage(Message msg) chatMessage = " + chatMsg);
             }
         };
     }
 
-    private void initClientHandler() {
-        //服务器端获取传递的ChatMessage
-        if (app.client == null) {
-            return;
-        }
-        clientHandler = new Handler() {
-            @Override
-            public void handleMessage(Message msg) {
-                Log.d(TAG, "into initClientHandler() handleMessage(Message msg)");
-                String text = (String) msg.obj;
-                gson = new Gson();
-                ChatMessage chatMsg = gson.fromJson(text, ChatMessage.class);
-                chatMessages.add(chatMsg);
-                adapter.refreshDeviceList(chatMessages);
+    private void serverOperation(ChatMessage chatMsg) {
+       switch (chatMsg.getOrder()){
+           case MSG_START_SEND_FILEINFO_BACK:
+               String str = chatMsg.getMsg();
+               String clientName = chatMsg.getDeviceName();
+               mFileInfo = new Gson().fromJson(str, FileInfo.class);
+               fileInfoList.add(mFileInfo);
+               if (mFileInfo != null){
+                   order = MSG_ORDER_START_SEND_FILE_BACK;
+                   sendChatMsgToTheClient(structChatMessage(clientName+ "please start send file"));
+                   Boolean isSucceed = app.server.beginAcceptFile(mFileInfo);
+                   if (isSucceed){
+                       order = MSG_ORDER_RECEIVE_FILE_SUCCEECE;
+                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"succeed!"));
+                   }else {
+                       order = MSG_ORDER_RECEIVE_FILE_FAILED;
+                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"failed!"));
+                   }
+               }
+               break;
+           case MSG_SEND_FILE_SUCCEECE:
+               break;
+           case MSG_SEND_FILE_FAILED:
+               break;
 
-                //服务器端获取录音参数
-                int frequency = chatMsg.getFrequency();
-                String format = chatMsg.getFormat();
-                Log.d(TAG,"message = "+chatMsg.getMsg() +" frequency = "+frequency + " format = "+format);
-
-                try {
-                    clientOperation(chatMsg.getMsg(),frequency,format);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                Log.d(TAG, "into initClientHandler() handleMessage(Message msg) chatMessage =" + chatMsg);
-            }
-        };
-    }
-
-    private void clientOperation(String text ,int frequency,String format) throws IOException {
-        switch (text){
-            case "startPWM":
-                mRecorder = new Recorder(this,frequency, format);
-                mRecorder.startRecord();
-                Log.d(TAG,"click startRecording");
-                break;
-            case "stopPWM":
-                if (mRecorder != null){
-                    mRecorder.stopRecord();
-                }else {
-                    Toast.makeText(this,"请先录音",Toast.LENGTH_SHORT).show();
-                }
-                Log.d(TAG,"click stopRecord");
-                break;
-            case "deleteFile":
-                if (mRecorder != null){
-                    mRecorder.deleteFile();
-                }else {
-                    Toast.makeText(this,"请先录音",Toast.LENGTH_SHORT).show();
-                }
-                Log.d(TAG,"click deleteFile");
-                break;
-            case "sendBack":
-                Log.d(TAG,"click sendRecordFileBack");
-                break;
-            default:
-                Toast.makeText(this,"无效指令",Toast.LENGTH_SHORT).show();
-                break;
-        }
+           default:
+               break;
+       }
     }
 
     private void initServerListener() {
-        if(app.server == null)  return;
+        if(app.server == null){
+            return;
+        }
         Log.d(TAG, "into initServerListener() app server =" + app.server);
         app.server.setServerMsgListener(new ServerMsgListener() {
             Message msg = null;
@@ -214,51 +208,30 @@ public class GroupChatActivityTest extends Activity implements OnClickListener, 
         Log.d(TAG, "out initServerListener() ");
     }
 
-    private void initClientListener() {
-        if (app.client == null) {
-            return;
-        }
-        Log.d(TAG, "into initClientListener() app client =" + app.client);
-        app.client.setClientMsgListener(new ClientMsgListener() {
-            
-            Message msg = null;
-            
-            @Override
-            public void handlerHotMsg(String hotMsg) {
-                Log.d(TAG, "into initClientListener() handlerHotMsg(String hotMsg) hotMsg = " + hotMsg);
-                msg = clientHandler.obtainMessage();
-                msg.obj = hotMsg;
-                clientHandler.sendMessage(msg);
-            }
-            
-            @Override
-            public void handlerErorMsg(String errorMsg) {
-                // TODO Auto-generated method stub
-                
-            }
-        });
-        Log.d(TAG, "out initClientListener()");
-    }
-
     @Override
     public void onClick(View v) {
         String strMsg;
         switch (v.getId()) {
             case R.id.btn_starPWM:
-                strMsg ="startPWM";
+                order = MSG_ORDER_START_RECORD;
+                strMsg = "start record"+",frequence:"+mServerFrequency+",formate:"+mServerFormat;
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_stopPWM:
-                strMsg = "stopPWM";
+                order = MSG_ORDER_STOP_RECORD;
+                strMsg = "stop record";
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_delet:
-                strMsg = "deleteFile";
+                order = MSG_ORDER_DELETE_RECORD_FILE;
+                strMsg = "delete file";
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_sendback:
-                strMsg = "sendBack";
+                order = MSG_ORDER_START_SEND_BACK;
+                strMsg = "send file back";
                 sendChatMsg(structChatMessage(strMsg));
+                break;
             default:
                 break;
         }
@@ -270,19 +243,32 @@ public class GroupChatActivityTest extends Activity implements OnClickListener, 
         if (app.server != null) {
             //send msg to all Clients
             app.server.sendMsgToAllCLients(chatMsg);
-        } else if (app.client != null) {
-            app.client.sendMsg(chatMsg);
+        }
+        Log.d(TAG, "out sendChatMsg(ChatMessage msg) msg =" + chatMsg);
+    }
+
+    /**send message to the client**/
+    private void sendChatMsgToTheClient(String chatMsg) {
+        Log.d(TAG, "into sendChatMsg(ChatMessage msg) msg =" + chatMsg);
+        if (app.server != null) {
+            //send msg to all Clients
+            app.server.sendMsgToAcceptSocket(chatMsg);
         }
         Log.d(TAG, "out sendChatMsg(ChatMessage msg) msg =" + chatMsg);
     }
 
     private String structChatMessage(String text) {
+//        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
+//        String strTime = format.format(new Date());
+
         ChatMessage msg = new ChatMessage();
         msg.setDeviceName(deviceName);
-        msg.setNetAddress(deviceIp);
+        msg.setNetAddress(serverIp);
+        msg.setOrder(order);
         msg.setMsg(text);
         msg.setFrequency(mServerFrequency);
         msg.setFormat(mServerFormat);
+//        msg.setMsgTime(strTime);
         gson = new Gson();
         return gson.toJson(msg);
     }

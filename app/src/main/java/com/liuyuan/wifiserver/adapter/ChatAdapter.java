@@ -73,7 +73,7 @@ public class ChatAdapter extends BaseAdapter{
     }
 
     public void refreshDeviceList(List<ChatMessage> chatMessages) {
-        this.messsages = messsages;
+        this.messsages = chatMessages;
         this.notifyDataSetChanged();
     }
 
