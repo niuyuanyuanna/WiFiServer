@@ -63,7 +63,7 @@ public class Recorder {
             mRecAudioFile = new File(dirFile,fileName);
 
             audioFile = new FileInfo();
-            audioFile.setFilePath(FileUtils.ROOT_PATH);
+            audioFile.setFilePath(path+"/"+fileName);
             audioFile.setFileName(fileName);
             audioFile.setFileType(mFormat);
 

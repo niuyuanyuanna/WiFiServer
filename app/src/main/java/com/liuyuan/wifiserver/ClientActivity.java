@@ -180,15 +180,16 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
                 Log.d(TAG, "click sendRecordFileBack");
                 break;
             case MSG_START_SEND_FILE_BACK:
-                //发送文件
-                Boolean complet = app.client.sendFile(mFileInfo);
-                if (complet){
-                    order = MSG_SEND_FILE_SUCCEECE;
-                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send succeed"));
-                }else {
-                    order = MSG_SEND_FILE_FAILED;
-                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send failed"));
-                }
+                //停止发送消息并发送文件
+                app.client.sendFile(mFileInfo);
+//                if (complet){
+////                    app.client.restartSendingMessage();
+//                    order = MSG_SEND_FILE_SUCCEECE;
+//                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send succeed"));
+//                }else {
+//                    order = MSG_SEND_FILE_FAILED;
+//                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send failed"));
+//                }
                 break;
 
             case MSG_ORDER_RECEIVE_FILE_SUCCEECE:

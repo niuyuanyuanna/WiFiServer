@@ -6,6 +6,7 @@ import com.liuyuan.wifiserver.ServerMainActivity;
 import com.liuyuan.wifiserver.WifiApplication;
 import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.model.FileInfo;
+import com.liuyuan.wifiserver.utils.FileUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -40,7 +41,9 @@ public class GameServer {
     private boolean onGoinglistner = true;
 
     public static int count;
+    public int socketPosition;
 
+    private Boolean onReceivingMsg = true;
     private Boolean isReceiveSucceed;
     /**
      * 接收文件线程列表数据
@@ -68,7 +71,7 @@ public class GameServer {
      **/
     public void beginListenandAcceptMsg() {
 
-      Thread receiveMsgThread =  new Thread(new Runnable() {
+     new Thread(new Runnable() {
             @Override
             public void run() {
                 try { // init server
@@ -84,17 +87,19 @@ public class GameServer {
                 }
                 //server accept from socket msg
                 if (mServerSocket != null) {
-                    while (onGoinglistner) {
+                    while (onGoinglistner && onReceivingMsg) {
                         try {
                             Socket socket = mServerSocket.accept();
                             if (socket != null) {
                                 if (!socketQueue.contains(socket)) {
                                     socketQueue.add(socket);
                                     count++; //记录连接人数
+                                    socketPosition = socketQueue.size();
+                                }else {
+                                    socketPosition = socketQueue.indexOf(socket)+1;
                                 }
                                 Log.d(TAG, "接收客户端消息" + socket);
                                 serverAcceptClientMsg(socket);
-                                acceptSocket = socket;
                             }
                         } catch (IOException e) {
                             e.printStackTrace();
@@ -102,9 +107,7 @@ public class GameServer {
                     }
                 }
             }
-        });
-        //将其加入猪线程池中运行
-        WifiApplication.MAIN_EXECUTOR.execute(receiveMsgThread);
+        }).start();
     }
 
     /**
@@ -117,7 +120,7 @@ public class GameServer {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                while (!socket.isClosed()) {
+                while (!socket.isClosed() && onReceivingMsg) {
                     try {
                         //接收客户端消息
                         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
@@ -125,8 +128,15 @@ public class GameServer {
                         if(str == null || str.equals("")) {
                             break;
                         }
+                        if (str.contains(FileUtils.ROOT_PATH)){
+                            socketPosition = socketQueue.indexOf(socket);
+                        }
                         Log.d(TAG, "client" + socket + "str =" + str);
-                        mServerMsgListener.handlerHotMsg(str);
+                        if (onReceivingMsg){
+                            mServerMsgListener.handlerHotMsg(str);
+                        }else {
+                            break;
+                        }
 
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -146,42 +156,36 @@ public class GameServer {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                if (mServerSocket != null) {
-                    try {
-                        Socket socket = mServerSocket.accept();
-                        if (socket != null) {
-                            mFileReceiver = new FileReceiver(socket, fileInfo);
-                            //加入线程池执行
-                            mFileReceiverList.add(mFileReceiver);
-                            mFileReceiver.setOnReceiveListener(new FileReceiver.OnReceiveListener() {
-                                @Override
-                                public void onStart() {
-                                    Log.d(TAG,"on Start.......................................");
-                                }
-
-                                @Override
-                                public void onProgress(FileInfo fileInfo, long progress, long total) {
-                                }
-
-                                @Override
-                                public void onSuccess(FileInfo fileInfo) {
-                                    isReceiveSucceed = true;
-                                    Log.d(TAG,"receive file" + fileInfo.getFileName() + "succeed !!!!!!!");
-
-                                }
-
-                                @Override
-                                public void onFailure(Throwable throwable, FileInfo fileInfo) {
-                                    isReceiveSucceed = false;
-                                    Log.d(TAG,"receive file" + fileInfo.getFileName() + "failed !!!!!!!");
-
-                                }
-                            });
-                            WifiApplication.MAIN_EXECUTOR.execute(mFileReceiver);
+                if (acceptSocket !=null){
+                    onReceivingMsg = false;
+                    mFileReceiver = new FileReceiver(acceptSocket, fileInfo);
+                    //加入线程池执行
+                    mFileReceiverList.add(mFileReceiver);
+                    mFileReceiver.setOnReceiveListener(new FileReceiver.OnReceiveListener() {
+                        @Override
+                        public void onStart() {
+                            Log.d(TAG,"on Start.......................................");
                         }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+
+                        @Override
+                        public void onProgress(FileInfo fileInfo, long progress, long total) {
+                        }
+
+                        @Override
+                        public void onSuccess(FileInfo fileInfo) {
+                            isReceiveSucceed = true;
+                            Log.d(TAG,"receive file" + fileInfo.getFileName() + "succeed !!!!!!!");
+
+                        }
+
+                        @Override
+                        public void onFailure(Throwable throwable, FileInfo fileInfo) {
+                            isReceiveSucceed = false;
+                            Log.d(TAG,"receive file" + fileInfo.getFileName() + "failed !!!!!!!");
+
+                        }
+                    });
+                    WifiApplication.MAIN_EXECUTOR.execute(mFileReceiver);
                 }
             }
         }).start();
@@ -211,6 +215,9 @@ public class GameServer {
         if (client.isConnected()) {
             if (!client.isOutputShutdown()) {
                 try {
+                    if (chatMsg.contains("please start send file")){
+                        socketPosition = socketQueue.indexOf(client);
+                    }
                     out = new PrintWriter(client.getOutputStream());
                     out.println(chatMsg);
                     out.flush();
@@ -230,12 +237,13 @@ public class GameServer {
      * @param chatMsg
      */
     public void sendMsgToAcceptSocket(String chatMsg) {
+        acceptSocket = socketQueue.get(socketPosition);
         sendMsg(acceptSocket, chatMsg);
+
     }
 
     public static interface ServerMsgListener {
         public void handlerErrorMsg(String errorMsg);
-
         public void handlerHotMsg(String hotMsg);
     }
 
@@ -262,6 +270,14 @@ public class GameServer {
 
     public void stopListener() {
         onGoinglistner = false;
+    }
+
+    public void stopReceiveMsg(){
+        onReceivingMsg = false;
+    }
+
+    public void restartAcceptMsg (){
+        onReceivingMsg = true;
     }
 
 

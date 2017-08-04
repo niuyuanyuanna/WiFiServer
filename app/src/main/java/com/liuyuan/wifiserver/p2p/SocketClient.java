@@ -6,6 +6,7 @@ import com.liuyuan.wifiserver.ClientMainActivity;
 import com.liuyuan.wifiserver.WifiApplication;
 import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.model.FileInfo;
+import com.liuyuan.wifiserver.utils.FileUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -32,6 +33,8 @@ public class SocketClient {
     private ClientMsgListener mClientMsgListener;
     //flag if got to listen
     private boolean onGoinglistner = true;
+
+    private boolean onSendingMsg = true;
 
     private FileSender mFileSender;
 
@@ -70,7 +73,6 @@ public class SocketClient {
                 try {
                     client = new Socket(site, port);
                     Log.i(TAG, "Client is created! site:" + site + " port:" + port);
-
                     //callback
                     mClientMsgListener.handlerHotMsg(Global.INT_CLIENT_SUCCESS);
                     //accept msg from GameServer
@@ -125,7 +127,7 @@ public class SocketClient {
             public void run() {
                 try {
                     if (client != null && client.isConnected()) {
-                        if (!client.isOutputShutdown()) {
+                        if (!client.isOutputShutdown() && onSendingMsg) {
                             PrintWriter out = new PrintWriter(client.getOutputStream());
                             out.println(chatMsg);
                             // out.println(JsonUtil.obj2Str(msg));
@@ -147,6 +149,8 @@ public class SocketClient {
         Log.i(TAG, "into sendFile()  file:" + fileInfo.toString());
         if (client != null && client.isConnected()) {
             Log.i(TAG, "client != null" + client);
+            onSendingMsg = false;
+
                 mFileSender = new FileSender(mContext,client, fileInfo);
                 mFileSender.setOnSendListener(new FileSender.OnSendListener() {
                     @Override
@@ -205,5 +209,9 @@ public class SocketClient {
 
     public void stopAcceptMessage() {
         onGoinglistner = false;
+    }
+
+    public void restartSendingMessage(){
+        onSendingMsg = true;
     }
 }

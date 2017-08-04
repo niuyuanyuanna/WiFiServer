@@ -161,17 +161,20 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
                String clientName = chatMsg.getDeviceName();
                mFileInfo = new Gson().fromJson(str, FileInfo.class);
                fileInfoList.add(mFileInfo);
+               mFileInfo.setPosition(fileInfoList.indexOf(mFileInfo)+1);
                if (mFileInfo != null){
                    order = MSG_ORDER_START_SEND_FILE_BACK;
+                   app.server.stopListener();
                    sendChatMsgToTheClient(structChatMessage(clientName+ "please start send file"));
-                   Boolean isSucceed = app.server.beginAcceptFile(mFileInfo);
-                   if (isSucceed){
-                       order = MSG_ORDER_RECEIVE_FILE_SUCCEECE;
-                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"succeed!"));
-                   }else {
-                       order = MSG_ORDER_RECEIVE_FILE_FAILED;
-                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"failed!"));
-                   }
+                   app.server.beginAcceptFile(mFileInfo);
+//                   if (isSucceed){
+//                       order = MSG_ORDER_RECEIVE_FILE_SUCCEECE;
+////                       app.server.restartAcceptMsg();
+//                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"succeed!"));
+//                   }else {
+//                       order = MSG_ORDER_RECEIVE_FILE_FAILED;
+//                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"failed!"));
+//                   }
                }
                break;
            case MSG_SEND_FILE_SUCCEECE:
@@ -196,9 +199,10 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
                 Log.d(TAG, "into initServerListener() handlerHotMsg(String hotMsg) hotMsg = " + hotMsg);
                 msg = serverHandler.obtainMessage();
                 msg.obj = hotMsg;
+                msg.what = 1;
                 serverHandler.sendMessage(msg);
             }
-            
+
             @Override
             public void handlerErrorMsg(String errorMsg) {
                 // TODO Auto-generated method stub

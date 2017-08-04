@@ -1,40 +1,62 @@
 package com.liuyuan.wifiserver.model;
 
-import android.os.Environment;
-
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import java.io.File;
 import java.io.Serializable;
 import java.util.List;
 
-
 public class FileInfo implements Serializable {
 
-    //文件路径
+    /**
+     * 文件传输结果：1 成功  -1 失败
+     */
+    public static final int FLAG_SUCCESS = 1;
+    public static final int FLAG_FAILURE = -1;
+
+
+    /**
+     * 文件路径
+     */
     private String filePath;
 
-    //文件类型
+    /**
+     * 文件类型
+     */
     private String fileType;
 
-    //文件大小
+    /**
+     * 文件大小
+     */
     private long size;
 
-    //文件名
+    /***
+     * 文件名
+     */
     private String fileName;
 
-    //文件传送结果
+    /**
+     * 文件传送结果
+     */
     private int result;
 
-    //传输进度
+    /**
+     * 传输进度
+     */
     private int progress;
 
-    public FileInfo( String filePath) {
+
+    private int position;
+
+
+    public FileInfo(int position, String filePath, long size) {
+        this.position = position;
         this.filePath = filePath;
+        this.size = size;
     }
 
-    public FileInfo() {}
+    public FileInfo() {
+    }
 
     public String getFilePath() {
         return filePath;
@@ -84,16 +106,37 @@ public class FileInfo implements Serializable {
         this.progress = progress;
     }
 
+    public int getPosition() {
+        return position;
+    }
+
+    public void setPosition(int position) {
+        this.position = position;
+    }
+
     public static String toJsonStr(FileInfo fileInfo) {
         return new Gson().toJson(fileInfo);
+    }
+
+    public static String toJsonStr(List<FileInfo> fileInfoList) {
+        return new Gson().toJson(fileInfoList);
     }
 
     public static FileInfo toObject(String jsonStr) {
         return new Gson().fromJson(jsonStr, FileInfo.class);
     }
 
+    public static List<FileInfo> toObjectList(String jsonStr) {
+        return new Gson().fromJson(jsonStr, new TypeToken<List<FileInfo>>(){}.getType());
+    }
+
     @Override
     public String toString() {
-        return "FileInfo [" + " fileName=" + fileName + ", size=" + size + ",fileType=" + fileType +']';
+        return "FileInfo:{" +
+                "filePath='" + filePath + '\'' +
+                ", fileType=" + fileType +
+                ", size=" + size +
+                ", position=" + position +
+                '}';
     }
 }

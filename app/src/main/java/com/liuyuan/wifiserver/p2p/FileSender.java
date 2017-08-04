@@ -93,7 +93,7 @@ public class FileSender  implements Runnable {
             init();
         } catch (Exception e) {
             e.printStackTrace();
-           Log.d(TAG,"FileSender init() ------->>> occur expection");
+           Log.d(TAG,"FileSender init() --------------------->>> occur expection");
             if(mOnSendListener != null) {
                 mOnSendListener.onFailure(e, mFileInfo);
             }
