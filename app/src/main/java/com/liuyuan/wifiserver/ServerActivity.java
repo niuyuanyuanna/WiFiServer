@@ -199,7 +199,6 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
                 Log.d(TAG, "into initServerListener() handlerHotMsg(String hotMsg) hotMsg = " + hotMsg);
                 msg = serverHandler.obtainMessage();
                 msg.obj = hotMsg;
-                msg.what = 1;
                 serverHandler.sendMessage(msg);
             }
 
