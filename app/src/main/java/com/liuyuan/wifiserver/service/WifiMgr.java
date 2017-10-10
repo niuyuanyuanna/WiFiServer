@@ -317,22 +317,39 @@ public class WifiMgr {
         return 0;
     }
 
+    private static String formatIpAddress(int ipAdress) {
+
+        return (ipAdress & 0xFF ) + "." +
+                ((ipAdress >> 8 ) & 0xFF) + "." +
+                ((ipAdress >> 16 ) & 0xFF) + "." +
+                ( ipAdress >> 24 & 0xFF) ;
+    }
+
     /**
-     * 获取连接WiFi后的IP地址
+     * 获取连接WiFi后的服务器IP地址
      * @return
      */
     public String getIpAddressFromHotspot() {
         DhcpInfo dhcpInfo = mWifiManager.getDhcpInfo();
         if(dhcpInfo != null) {
             int address = dhcpInfo.gateway;
-            return ((address & 0xFF)
-                    + "." + ((address >> 8) & 0xFF)
-                    + "." + ((address >> 16) & 0xFF)
-                    + "." + ((address >> 24) & 0xFF));
+            return formatIpAddress(address);
         }
         return null;
     }
-    
+
+    /**
+     * 获取连接wifi后本机的IP地址
+     */
+    public String getLocalIpAddress(){
+        WifiInfo wifiInfo = mWifiManager.getConnectionInfo();
+        if (wifiInfo != null){
+            int address = wifiInfo.getIpAddress();
+            return formatIpAddress(address);
+        }
+        return null;
+    }
+
     /**
      * 创建WifiConfiguration对象 分为三种情况：1没有密码;2用wep加密;3用wpa加密
      * 

@@ -6,16 +6,16 @@ import com.liuyuan.wifiserver.ServerMainActivity;
 import com.liuyuan.wifiserver.WifiApplication;
 import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.model.FileInfo;
-import com.liuyuan.wifiserver.utils.FileUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -28,11 +28,12 @@ public class GameServer {
     private static GameServer instance;
     public ServerMainActivity mContext;
 
-    public static List<Socket> socketQueue = new ArrayList<Socket>();
+    private static HashMap<String, Socket> socketHashMap = new HashMap<>();
+    private static HashMap<Socket,Boolean> socketIsReceFileHashMap = new HashMap<>();
+
     private ServerSocket mServerSocket;
     private int mPort;
     private BufferedReader in;
-    private Socket acceptSocket; //当前正在传送文件的客户端
 
     private ServerMsgListener mServerMsgListener;
     private FileReceiver mFileReceiver;
@@ -40,11 +41,6 @@ public class GameServer {
     //flag if got to listen
     private boolean onGoinglistner = true;
 
-    public static int count;
-    public int socketPosition;
-
-    private Boolean onReceivingMsg = true;
-    private Boolean isReceiveSucceed;
     /**
      * 接收文件线程列表数据
      */
@@ -71,37 +67,35 @@ public class GameServer {
      **/
     public void beginListenandAcceptMsg() {
 
-     new Thread(new Runnable() {
+        new Thread(new Runnable() {
             @Override
             public void run() {
                 try { // init server
                     mServerSocket = new ServerSocket(mPort);
                     mServerMsgListener.handlerHotMsg(Global.INT_SERVER_SUCCESS);
                     Log.d(TAG, "server  =" + mServerSocket);
-                } catch (SocketException e) {
-                    e.printStackTrace();
-                    mServerMsgListener.handlerErrorMsg(Global.INT_SERVER_FAIL);
                 } catch (IOException e) {
                     e.printStackTrace();
                     mServerMsgListener.handlerErrorMsg(Global.INT_SERVER_FAIL);
                 }
                 //server accept from socket msg
                 if (mServerSocket != null) {
-                    while (onGoinglistner && onReceivingMsg) {
+                    while (onGoinglistner) {
                         try {
                             Socket socket = mServerSocket.accept();
                             if (socket != null) {
-                                if (!socketQueue.contains(socket)) {
-                                    socketQueue.add(socket);
-                                    count++; //记录连接人数
-                                    socketPosition = socketQueue.size();
-                                }else {
-                                    socketPosition = socketQueue.indexOf(socket)+1;
+                                if (!socketHashMap.containsValue(socket)) {
+                                    String deviceip = null;
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+                                        deviceip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getHostString();
+                                    }
+                                    Log.d(TAG, "device ip ===================" + deviceip);
+                                    socketHashMap.put(deviceip, socket);
+                                    socketIsReceFileHashMap.put(socket,false);
                                 }
-                                Log.d(TAG, "接收客户端消息" + socket);
                                 serverAcceptClientMsg(socket);
                             }
-                        } catch (IOException e) {
+                        } catch (IOException | InterruptedException e) {
                             e.printStackTrace();
                         }
                     }
@@ -112,32 +106,31 @@ public class GameServer {
 
     /**
      * accept from socket msg
-     *
-     * @param socket
      */
-    private void serverAcceptClientMsg(final Socket socket) {
-        Log.d(TAG,"into serverAcceptClientMsg"+mServerSocket);
+    private void serverAcceptClientMsg(final Socket socket) throws InterruptedException {
+        Log.d(TAG, "into serverAcceptClientMsg" + mServerSocket);
         new Thread(new Runnable() {
             @Override
             public void run() {
-                while (!socket.isClosed() && onReceivingMsg) {
+                while (!socket.isClosed() && !socketIsReceFileHashMap.get(socket)) {
                     try {
                         //接收客户端消息
                         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-                        String str = in.readLine();
-                        if(str == null || str.equals("")) {
-                            break;
-                        }
-                        if (str.contains(FileUtils.ROOT_PATH)){
-                            socketPosition = socketQueue.indexOf(socket);
-                        }
-                        Log.d(TAG, "client" + socket + "str =" + str);
-                        if (onReceivingMsg){
+                        char[] buffer = new char[1];
+                        in.read(buffer,0,1);
+                        if (buffer[0] == 'm'){
+                            String str = in.readLine();
+                            if (str == null || str.equals("")) {
+                                break;
+                            }
+                            Log.d(TAG, "into handle message in the UI xiancheng " + str);
                             mServerMsgListener.handlerHotMsg(str);
                         }else {
-                            break;
-                        }
+                            //接收文件
 
+
+
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -145,6 +138,7 @@ public class GameServer {
 
             }
         }).start();
+
     }
 
     /**
@@ -152,44 +146,43 @@ public class GameServer {
      *
      * @param fileInfo
      */
-    public Boolean beginAcceptFile(final FileInfo fileInfo) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (acceptSocket !=null){
-                    onReceivingMsg = false;
-                    mFileReceiver = new FileReceiver(acceptSocket, fileInfo);
-                    //加入线程池执行
-                    mFileReceiverList.add(mFileReceiver);
-                    mFileReceiver.setOnReceiveListener(new FileReceiver.OnReceiveListener() {
-                        @Override
-                        public void onStart() {
-                            Log.d(TAG,"on Start.......................................");
-                        }
+    public void beginAcceptFile(FileInfo fileInfo,String deviceip) throws InterruptedException {
 
-                        @Override
-                        public void onProgress(FileInfo fileInfo, long progress, long total) {
-                        }
+        final Socket acceptSocket = socketHashMap.get(deviceip);
+        if (acceptSocket != null && acceptSocket.isConnected()) {
+            socketIsReceFileHashMap.put(acceptSocket,true);
 
-                        @Override
-                        public void onSuccess(FileInfo fileInfo) {
-                            isReceiveSucceed = true;
-                            Log.d(TAG,"receive file" + fileInfo.getFileName() + "succeed !!!!!!!");
-
-                        }
-
-                        @Override
-                        public void onFailure(Throwable throwable, FileInfo fileInfo) {
-                            isReceiveSucceed = false;
-                            Log.d(TAG,"receive file" + fileInfo.getFileName() + "failed !!!!!!!");
-
-                        }
-                    });
-                    WifiApplication.MAIN_EXECUTOR.execute(mFileReceiver);
+            Log.d(TAG, "beginAcceptFile acceptSocket:" + acceptSocket);
+            mFileReceiver = new FileReceiver(acceptSocket, fileInfo);
+            //加入线程池执行
+            mFileReceiverList.add(mFileReceiver);
+            mFileReceiver.setOnReceiveListener(new FileReceiver.OnReceiveListener() {
+                @Override
+                public void onStart() {
+                    Log.d(TAG, "on Start.......................................");
                 }
-            }
-        }).start();
-        return isReceiveSucceed;
+
+                @Override
+                public void onProgress(FileInfo fileInfo, long progress, long total) {
+                }
+
+                @Override
+                public void onSuccess(FileInfo fileInfo) {
+
+                    socketIsReceFileHashMap.put(acceptSocket,false);
+                    Log.d(TAG, "receive file" + fileInfo.getFileName() + "succeed !!!!!!!");
+
+                }
+
+                @Override
+                public void onFailure(Throwable throwable, FileInfo fileInfo) {
+                    socketIsReceFileHashMap.put(acceptSocket,false);
+                    Log.d(TAG, "receive file" + fileInfo.getFileName() + "failed !!!!!!!");
+
+                }
+            });
+            WifiApplication.MAIN_EXECUTOR.execute(mFileReceiver);
+        }
     }
 
     /**
@@ -199,51 +192,58 @@ public class GameServer {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                for (int i = 0; i < socketQueue.size(); i++) {
-                    sendMsg(socketQueue.get(i), chatMsg);
+                for (HashMap.Entry<String, Socket> entry : socketHashMap.entrySet()) {
+                    Log.d(TAG, "sendMsgToAllCLients socket:" + entry.getValue() + "\nkeys:" + entry.getKey());
+                    sendMsg(entry.getValue(), chatMsg);
                 }
             }
         }).start();
     }
 
     /**
+     * send msg to the accept socket
+     */
+    public void sendMsgToAcceptClient(final String chatMsg, final String deviceip) {
+        //通过HashMap找到要接收的socket
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Log.d(TAG, "into sendMsgToAcceptClient() deviceip:" + deviceip);
+                Socket acceptSocket = socketHashMap.get(deviceip);
+                if (acceptSocket != null && acceptSocket.isConnected()) {
+                    sendMsg(acceptSocket, chatMsg);
+                    Log.d(TAG, "sendMsgToAcceptClient acceptSocket ip adreess :" + deviceip + " acceptSocket:" + acceptSocket);
+                }
+            }
+        }).start();
+    }
+
+
+    /**
      * send msg to the socket
      **/
-    public void sendMsg(Socket client, String chatMsg) {
+    private void sendMsg(Socket client, String chatMsg) {
         Log.i(TAG, "into sendMsg(final Socket client,final ChatMessage msg) msg = " + chatMsg);
         PrintWriter out = null;
         if (client.isConnected()) {
             if (!client.isOutputShutdown()) {
                 try {
-                    if (chatMsg.contains("please start send file")){
-                        socketPosition = socketQueue.indexOf(client);
-                    }
                     out = new PrintWriter(client.getOutputStream());
+                    out.print('m');
                     out.println(chatMsg);
                     out.flush();
-                    Log.i(TAG, "into sendMsg(final Socket client,final ChatMessage msg) msg = " + chatMsg + " success!");
-                } catch (IOException e) {
+                 } catch (IOException e) {
                     e.printStackTrace();
-                    Log.d(TAG, "into sendMsg(final Socket client,final ChatMessage msg) fail!");
+                    Log.d(TAG, "sendMsg()"+chatMsg+" fail!");
                 }
             }
         }
         Log.i(TAG, "out sendMsg(final Socket client,final ChatMessage msg) msg = " + chatMsg);
     }
 
-    /**
-     * send msg to the accept socket
-     *
-     * @param chatMsg
-     */
-    public void sendMsgToAcceptSocket(String chatMsg) {
-        acceptSocket = socketQueue.get(socketPosition);
-        sendMsg(acceptSocket, chatMsg);
-
-    }
-
     public static interface ServerMsgListener {
         public void handlerErrorMsg(String errorMsg);
+
         public void handlerHotMsg(String hotMsg);
     }
 
@@ -251,9 +251,6 @@ public class GameServer {
         this.mServerMsgListener = mServerMsgListener;
     }
 
-    public FileReceiver getmFileReceiver() {
-        return mFileReceiver;
-    }
 
     public void closeConnection() {
         Log.i(TAG, "into closeConnection()...................................");
@@ -271,14 +268,5 @@ public class GameServer {
     public void stopListener() {
         onGoinglistner = false;
     }
-
-    public void stopReceiveMsg(){
-        onReceivingMsg = false;
-    }
-
-    public void restartAcceptMsg (){
-        onReceivingMsg = true;
-    }
-
 
 }

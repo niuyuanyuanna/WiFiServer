@@ -150,7 +150,6 @@ public class ClientMainActivity extends AppCompatActivity implements
 
     private void gotoChatActivity() {
         Intent intent = new Intent();
-        intent.putExtra("serverIp", serverIp);
         intent.putExtra("clientIp", clientIp);
         intent.setClass(this, ClientActivity.class);
         this.startActivity(intent);
@@ -226,13 +225,15 @@ public class ClientMainActivity extends AppCompatActivity implements
             Log.d(TAG, "into 刷新wifi热点列表 adapter is not null！");
             mWifiHotAdapter.refreshData(wifiList);
         }
-        Log.d(TAG, "out 刷新wifi热点列表");
+
     }
 
     //初始化客户端socket
     private void initSocketClient() {
         serverIp = mWifiMgr.getIpAddressFromHotspot();
+        clientIp = mWifiMgr.getLocalIpAddress();
         Log.d(TAG, "serverIp:" + serverIp+"===================================");
+        Log.d(TAG, "clientIp:" + clientIp+"===================================");
         mClient = SocketClient.newInstance(this, serverIp, Global.PORT, new SocketClient.ClientMsgListener() {
             Message msg = null;
 

@@ -34,8 +34,6 @@ public class SocketClient {
     //flag if got to listen
     private boolean onGoinglistner = true;
 
-    private boolean onSendingMsg = true;
-
     private FileSender mFileSender;
 
     /**
@@ -127,7 +125,7 @@ public class SocketClient {
             public void run() {
                 try {
                     if (client != null && client.isConnected()) {
-                        if (!client.isOutputShutdown() && onSendingMsg) {
+                        if (!client.isOutputShutdown()) {
                             PrintWriter out = new PrintWriter(client.getOutputStream());
                             out.println(chatMsg);
                             // out.println(JsonUtil.obj2Str(msg));
@@ -148,37 +146,34 @@ public class SocketClient {
     public Boolean sendFile(final FileInfo fileInfo) {
         Log.i(TAG, "into sendFile()  file:" + fileInfo.toString());
         if (client != null && client.isConnected()) {
-            Log.i(TAG, "client != null" + client);
-            onSendingMsg = false;
+            mFileSender = new FileSender(mContext, client, fileInfo);
+            //添加到线程池执行
+            mFileSenderList.add(mFileSender);
+            WifiApplication.FILE_SENDER_EXECUTOR.execute(mFileSender);
+            mFileSender.setOnSendListener(new FileSender.OnSendListener() {
+                @Override
+                public void onStart() {
+                    Log.d(TAG, "on Start.......................................");
+                }
 
-                mFileSender = new FileSender(mContext,client, fileInfo);
-                mFileSender.setOnSendListener(new FileSender.OnSendListener() {
-                    @Override
-                    public void onStart() {
-                        Log.d(TAG,"on Start.......................................");
-                    }
+                @Override
+                public void onProgress(long progress, long total) {
 
-                    @Override
-                    public void onProgress(long progress, long total) {
+                }
 
-                    }
+                @Override
+                public void onSuccess(FileInfo fileInfo) {
+                    sendFileSucceed = true;
+                    Log.d(TAG, "send file" + fileInfo.getFileName() + "succeed !!!!!!!");
 
-                    @Override
-                    public void onSuccess(FileInfo fileInfo) {
-                        sendFileSucceed = true;
-                        Log.d(TAG,"send file" + fileInfo.getFileName() + "succeed !!!!!!!");
+                }
 
-                    }
-
-                    @Override
-                    public void onFailure(Throwable throwable, FileInfo fileInfo) {
-                        sendFileSucceed = false;
-                        Log.d(TAG,"send file" + fileInfo.getFileName() + "failed !!!!!!!" +throwable);
-                    }
-                });
-                //添加到线程池执行
-                mFileSenderList.add(mFileSender);
-                WifiApplication.FILE_SENDER_EXECUTOR.execute(mFileSender);
+                @Override
+                public void onFailure(Throwable throwable, FileInfo fileInfo) {
+                    sendFileSucceed = false;
+                    Log.d(TAG, "send file" + fileInfo.getFileName() + "failed !!!!!!!" + throwable);
+                }
+            });
         }
         return sendFileSucceed;
     }
@@ -189,11 +184,8 @@ public class SocketClient {
 
     public static interface ClientMsgListener {
         public void handlerErorMsg(String errorMsg);
-        public void handlerHotMsg(String hotMsg);
-    }
 
-    public FileSender getmFileSender() {
-        return mFileSender;
+        public void handlerHotMsg(String hotMsg);
     }
 
     public void closeConnection() {
@@ -209,9 +201,5 @@ public class SocketClient {
 
     public void stopAcceptMessage() {
         onGoinglistner = false;
-    }
-
-    public void restartSendingMessage(){
-        onSendingMsg = true;
     }
 }

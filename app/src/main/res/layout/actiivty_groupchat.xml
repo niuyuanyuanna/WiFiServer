@@ -6,11 +6,12 @@
     android:weightSum="1"
     tools:context="com.liuyuan.wifiserver.ServerActivity">
 
-    <Button
-        android:id="@+id/btn_refresh"
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="刷新" />
+        android:gravity="center"
+        android:textSize="20sp"
+        android:text="message"/>
 
     <ListView
         android:id="@+id/lv_chat"

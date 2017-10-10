@@ -1,15 +1,21 @@
 package com.liuyuan.wifiserver.service;
 
 import android.content.Context;
-import android.net.DhcpInfo;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.util.Log;
 
 import com.liuyuan.wifiserver.constant.Global;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Enumeration;
 
 /**
  * 热点搜索，创建，关闭
@@ -52,6 +58,51 @@ public class WifiHotAdmin {
         boolean isCreate = createWifiAp(wifiName);
         return isCreate;
     }
+
+
+    //获取自身IP地址
+    public String getWifiHotIpAddress() {
+        try {
+            for (Enumeration<NetworkInterface> en = NetworkInterface
+                    .getNetworkInterfaces(); en.hasMoreElements();) {
+                NetworkInterface intf = en.nextElement();
+                if (intf.getName().contains("wlan")) {
+                    for (Enumeration<InetAddress> enumIpAddr = intf
+                            .getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                        InetAddress inetAddress = enumIpAddr.nextElement();
+                        if (!inetAddress.isLoopbackAddress()
+                                && (inetAddress.getAddress().length == 4)) {
+                            Log.d(TAG, inetAddress.getHostAddress());
+                            return inetAddress.getHostAddress();
+                        }
+                    }
+                }
+            }
+        } catch (SocketException ex) {
+            Log.e(TAG, ex.toString());
+        }
+        return null;
+    }
+
+    //获取连接设备的ip
+    public ArrayList<String> getConnectedHotIP() {
+        ArrayList<String> connectedIP = new ArrayList<String>();
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("/proc/net/arp"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] splitted = line.split(" +");
+                if (splitted != null && splitted.length >= 4) {
+                    String ip = splitted[0];
+                    connectedIP.add(ip);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return connectedIP;
+    }
+
 
     public void closeWifiAp() {
         closeWifiAp(mWifiManager);
@@ -153,6 +204,9 @@ public class WifiHotAdmin {
         return wifiManager.isWifiEnabled();
     }
 
+
+
+
     //设置wifi热点使用wpa2密码保护
     private WifiConfiguration createPassHotWifiConfig(String mSSID,
                                                       String mPasswd) {
@@ -177,20 +231,4 @@ public class WifiHotAdmin {
         return config;
     }
 
-    /**
-     * 获取开启便携热点后自身热点IP地址
-     * @param context
-     * @return
-     */
-    private String getHotspotLocalIpAddress() {
-        DhcpInfo dhcpInfo = mWifiManager.getDhcpInfo();
-        if(dhcpInfo != null) {
-            int address = dhcpInfo.serverAddress;
-            return ((address & 0xFF)
-                    + "." + ((address >> 8) & 0xFF)
-                    + "." + ((address >> 16) & 0xFF)
-                    + "." + ((address >> 24) & 0xFF));
-        }
-        return null;
-    }
 }

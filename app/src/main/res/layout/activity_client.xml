@@ -7,19 +7,16 @@
     android:orientation="vertical"
     tools:context="com.liuyuan.wifiserver.ClientActivity">
 
-    <Button
-        android:id="@+id/btn_refresh"
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="刷新" />
+        android:gravity="center"
+        android:textSize="20sp"
+        android:text="message"/>
 
     <ListView
         android:id="@+id/lv_chat"
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_weight="1" />
-    <TextView
-        android:id="@+id/tv_client_state"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
 </LinearLayout>

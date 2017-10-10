@@ -66,9 +66,9 @@ public class FileSender  implements Runnable {
 
 
     public FileSender(Context context, Socket socket, FileInfo fileInfo) {
-        mContext = context;
-        mSocket = socket;
-        mFileInfo = fileInfo;
+        this.mContext = context;
+        this.mSocket = socket;
+        this.mFileInfo = fileInfo;
     }
 
     /**
@@ -183,13 +183,13 @@ public class FileSender  implements Runnable {
             }
         }
 
-        if(mSocket != null && mSocket.isConnected()) {
-            try {
-                mSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+//        if(mSocket != null && mSocket.isConnected()) {
+//            try {
+//                mSocket.close();
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
     }
 
     /**

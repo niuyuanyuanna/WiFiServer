@@ -22,33 +22,21 @@ import com.liuyuan.wifiserver.model.FileInfo;
 import com.liuyuan.wifiserver.p2p.GameServer.ServerMsgListener;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+
+import static com.liuyuan.wifiserver.constant.Global.ORDER_DELETE_RECORD_FILE;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_RECORD;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_SEND_BACK;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_SEND_FILE_BACK;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_STOP_RECORD;
+import static com.liuyuan.wifiserver.constant.Global.MSG_SEND_FILE_FAILED;
+import static com.liuyuan.wifiserver.constant.Global.MSG_SEND_FILE_SUCCEECE;
+import static com.liuyuan.wifiserver.constant.Global.MSG_START_SEND_FILEINFO_BACK;
 
 public class ServerActivity extends Activity implements OnClickListener, AdapterView.OnItemSelectedListener {
 
     private static final String TAG = ServerActivity.class.getSimpleName();
-
-    //服务器发送开始录音指令
-    public static final int MSG_ORDER_START_RECORD = 0x661;
-    //服务器发送停止录音指令
-    public static final int MSG_ORDER_STOP_RECORD = 0x662;
-    //服务器发送删除录音指令
-    public static final int MSG_ORDER_DELETE_RECORD_FILE = 0x663;
-    //服务器发送录音文件指令
-    public static final int MSG_ORDER_START_SEND_BACK = 0x664;
-    //客户端开始发送录音文件信息指令
-    public static final int MSG_START_SEND_FILEINFO_BACK = 0x665;
-    //服务器发送开始发送录音文件指令
-    public static final int MSG_ORDER_START_SEND_FILE_BACK = 0x666;
-    //客户端发送录音文件成功
-    public static final int MSG_SEND_FILE_SUCCEECE = 0x667;
-    //客户端发送录音文件失败
-    public static final int MSG_SEND_FILE_FAILED = 0x668;
-    //服务器接收录音文件成功
-    public static final int MSG_ORDER_RECEIVE_FILE_SUCCEECE = 0x669;
-    //服务器接收录音文件失败
-    public static final int MSG_ORDER_RECEIVE_FILE_FAILED = 0x670;
-
 
     private ListView mLvMsgs;
     private Spinner spFrequency;
@@ -57,6 +45,7 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
 
     private ChatAdapter adapter;
     public List<ChatMessage> chatMessages = new ArrayList<ChatMessage>();
+    private HashMap<String,FileInfo> fileInfoHashMap = new HashMap<>();
     
     private String deviceName;
     private String serverIp;
@@ -72,8 +61,6 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
     private String mServerFormat ;
     //录音文件信息
     private FileInfo mFileInfo;
-    //接收到的文件信息列表
-    public  List<FileInfo> fileInfoList = new ArrayList<FileInfo>();
 
 
     @Override
@@ -143,38 +130,33 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
             public void handleMessage(Message msg) {
                 Log.i(TAG, "into initServerHandler() handleMessage(Message msg)");
                 String text = (String) msg.obj;
-//                sendChatMsg(text);
                 gson = new Gson();
                 ChatMessage chatMsg = gson.fromJson(text, ChatMessage.class);
                 chatMessages.add(chatMsg);
                 adapter.refreshDeviceList(chatMessages);
-                serverOperation(chatMsg);
+                try {
+                    serverOperation(chatMsg);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 Log.d(TAG, "out initServerHandler() handleMessage(Message msg) chatMessage = " + chatMsg);
             }
         };
     }
 
-    private void serverOperation(ChatMessage chatMsg) {
+    private void serverOperation(ChatMessage chatMsg) throws InterruptedException {
        switch (chatMsg.getOrder()){
            case MSG_START_SEND_FILEINFO_BACK:
                String str = chatMsg.getMsg();
+               String deviceip = chatMsg.getNetAddress();
                String clientName = chatMsg.getDeviceName();
+               Log.d(TAG,"serverOperation : the clientip = "+ deviceip);
                mFileInfo = new Gson().fromJson(str, FileInfo.class);
-               fileInfoList.add(mFileInfo);
-               mFileInfo.setPosition(fileInfoList.indexOf(mFileInfo)+1);
                if (mFileInfo != null){
-                   order = MSG_ORDER_START_SEND_FILE_BACK;
-                   app.server.stopListener();
-                   sendChatMsgToTheClient(structChatMessage(clientName+ "please start send file"));
-                   app.server.beginAcceptFile(mFileInfo);
-//                   if (isSucceed){
-//                       order = MSG_ORDER_RECEIVE_FILE_SUCCEECE;
-////                       app.server.restartAcceptMsg();
-//                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"succeed!"));
-//                   }else {
-//                       order = MSG_ORDER_RECEIVE_FILE_FAILED;
-//                       sendChatMsgToTheClient(structChatMessage("receive " + mFileInfo.getFileName() +"failed!"));
-//                   }
+                   fileInfoHashMap.put(deviceip,mFileInfo);
+                   order = ORDER_START_SEND_FILE_BACK;
+                   sendChatMsgToTheClient(structChatMessage(clientName+ "please start send file"),deviceip);
+                   app.server.beginAcceptFile(mFileInfo,deviceip);
                }
                break;
            case MSG_SEND_FILE_SUCCEECE:
@@ -216,25 +198,26 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
         String strMsg;
         switch (v.getId()) {
             case R.id.btn_starPWM:
-                order = MSG_ORDER_START_RECORD;
+                order = ORDER_START_RECORD;
                 strMsg = "start record"+",frequence:"+mServerFrequency+",formate:"+mServerFormat;
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_stopPWM:
-                order = MSG_ORDER_STOP_RECORD;
+                order = ORDER_STOP_RECORD;
                 strMsg = "stop record";
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_delet:
-                order = MSG_ORDER_DELETE_RECORD_FILE;
+                order = ORDER_DELETE_RECORD_FILE;
                 strMsg = "delete file";
                 sendChatMsg(structChatMessage(strMsg));
                 break;
             case R.id.btn_sendback:
-                order = MSG_ORDER_START_SEND_BACK;
+                order = ORDER_START_SEND_BACK;
                 strMsg = "send file back";
                 sendChatMsg(structChatMessage(strMsg));
                 break;
+
             default:
                 break;
         }
@@ -251,11 +234,11 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
     }
 
     /**send message to the client**/
-    private void sendChatMsgToTheClient(String chatMsg) {
+    private void sendChatMsgToTheClient(String chatMsg,String deviceip) {
         Log.d(TAG, "into sendChatMsg(ChatMessage msg) msg =" + chatMsg);
         if (app.server != null) {
             //send msg to all Clients
-            app.server.sendMsgToAcceptSocket(chatMsg);
+            app.server.sendMsgToAcceptClient(chatMsg,deviceip);
         }
         Log.d(TAG, "out sendChatMsg(ChatMessage msg) msg =" + chatMsg);
     }
@@ -271,6 +254,8 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
         msg.setMsg(text);
         msg.setFrequency(mServerFrequency);
         msg.setFormat(mServerFormat);
+        chatMessages.add(msg);
+        adapter.refreshDeviceList(chatMessages);
 //        msg.setMsgTime(strTime);
         gson = new Gson();
         return gson.toJson(msg);

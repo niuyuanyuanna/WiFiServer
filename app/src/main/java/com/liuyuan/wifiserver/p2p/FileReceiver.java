@@ -21,13 +21,8 @@ public class FileReceiver implements Runnable {
     /**
      * 字节数组长度
      */
-    public static final int BYTE_SIZE_HEADER = 1024 * 10;
     public static final int BYTE_SIZE_DATA = 1024 * 4;
 
-    /**
-     * 传输字节类型
-     */
-    public static final String UTF_8 = "UTF-8";
 
     /**
      * 接收文件的Socket的输入输出流
@@ -106,7 +101,7 @@ public class FileReceiver implements Runnable {
             }
         }
 
-        //文件传输完毕
+        //文件传输完毕,关闭输入流，关闭socket
         try {
             finishTransfer();
         } catch (Exception e) {
@@ -179,13 +174,13 @@ public class FileReceiver implements Runnable {
             }
         }
 
-        if(mSocket != null && mSocket.isConnected()) {
-            try {
-                mSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+//        if(mSocket != null && mSocket.isConnected()) {
+//            try {
+//                mSocket.close();
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
     }
 
     /**

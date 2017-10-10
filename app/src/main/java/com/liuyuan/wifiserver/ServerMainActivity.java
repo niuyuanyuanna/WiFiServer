@@ -9,22 +9,26 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.liuyuan.wifiserver.adapter.DeviceAdapter;
 import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.p2p.GameServer;
 import com.liuyuan.wifiserver.service.WifiHotAdmin;
+
+import java.util.ArrayList;
 
 public class ServerMainActivity extends AppCompatActivity implements
         View.OnClickListener {
     private static String TAG = ServerMainActivity.class.getSimpleName();
     private TextView mTvStatus;
-    private Button mBtnCreateHot;
-    private Button mBtngotoChat;
-
+    private ListView mListView;
 
     private WifiHotAdmin mWifiHotAdmin;
+    private DeviceAdapter mDeviceAdapter;
+    private ArrayList<String> deviceIp;
 
     private String serverIp;
 
@@ -40,12 +44,12 @@ public class ServerMainActivity extends AppCompatActivity implements
     }
 
     private void initUi() {
-        mBtnCreateHot = (Button) this.findViewById(R.id.btn_create);
-        mBtngotoChat = (Button) this.findViewById(R.id.btn_gotochat);
-        mTvStatus = (TextView) this.findViewById(R.id.tv_status);
+        findViewById(R.id.btn_create).setOnClickListener(this);
+        findViewById(R.id.btn_refresh).setOnClickListener(this);
+        findViewById(R.id.btn_gotochat).setOnClickListener(this);
 
-        mBtnCreateHot.setOnClickListener(this);
-        mBtngotoChat.setOnClickListener(this);
+        mTvStatus = (TextView) this.findViewById(R.id.tv_status);
+        mListView = (ListView) this.findViewById(R.id.lv_chat);
 
         setStatus("请创建热点");
 
@@ -56,12 +60,13 @@ public class ServerMainActivity extends AppCompatActivity implements
                 super.handleMessage(msg);
                 Log.d(TAG, "initServerHandler() ");
                 if (msg.what == 0) {
+                    setStatus("服务器创建失败");
                     Toast.makeText(ServerMainActivity.this, "服务器创建失败", Toast.LENGTH_SHORT).show();
                 } else {
                     String text = (String) msg.obj;
                     if (Global.INT_SERVER_SUCCESS.equals(text)) {
                         Toast.makeText(ServerMainActivity.this, "服务器创建成功，等待连接中...", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "into initServerHandler() handleMessage(Message msg) text = " + text);
+                        setStatus("服务器创建成功，等待连接中...");
                     }
                 }
             }
@@ -85,9 +90,16 @@ public class ServerMainActivity extends AppCompatActivity implements
                 if (isSucceed) {
                     initGameServer();
                     setStatus("成功开启热点...");
+                    serverIp = mWifiHotAdmin.getWifiHotIpAddress();
+
                 } else {
                     setStatus("开启热点失败，请重试");
                 }
+                break;
+            case R.id.btn_refresh:
+                deviceIp = mWifiHotAdmin.getConnectedHotIP();
+                setStatus(deviceIp.size()-1+"个设备已连接");
+                refreshDeviceList(deviceIp);
                 break;
 
             case R.id.btn_gotochat:
@@ -114,7 +126,6 @@ public class ServerMainActivity extends AppCompatActivity implements
         Log.d(TAG, "into saveData()");
         WifiApplication app = (WifiApplication) this.getApplication();
         app.server = this.mGameServer;
-        Log.d(TAG, "out saveData() app client =" + app.client);
     }
 
     //初始化服务器socket
@@ -161,6 +172,19 @@ public class ServerMainActivity extends AppCompatActivity implements
         mTvStatus.setText(s);
     }
 
+
+    //更新device列表
+    private void refreshDeviceList(ArrayList deviceIp){
+        Log.d(TAG, "into 刷新device ip列表");
+        if (null == mDeviceAdapter) {
+            Log.d(TAG, "into 刷新device ip列表 adapter is null！");
+            mDeviceAdapter = new DeviceAdapter(deviceIp, this);
+            mListView.setAdapter(mDeviceAdapter);
+        } else {
+            Log.d(TAG, "into 刷新device ip列表 adapter is not null！");
+            mDeviceAdapter.refreshData(deviceIp);
+        }
+    }
 
     @Override
     protected void onDestroy() {

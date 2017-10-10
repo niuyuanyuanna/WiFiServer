@@ -22,29 +22,19 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.liuyuan.wifiserver.constant.Global.ORDER_DELETE_RECORD_FILE;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_RECEIVE_FILE_FAILED;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_RECEIVE_FILE_SUCCEECE;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_RECORD;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_SEND_BACK;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_START_SEND_FILE_BACK;
+import static com.liuyuan.wifiserver.constant.Global.ORDER_STOP_RECORD;
+import static com.liuyuan.wifiserver.constant.Global.MSG_SEND_FILE_FAILED;
+import static com.liuyuan.wifiserver.constant.Global.MSG_SEND_FILE_SUCCEECE;
+import static com.liuyuan.wifiserver.constant.Global.MSG_START_SEND_FILEINFO_BACK;
+
 public class ClientActivity extends AppCompatActivity implements View.OnClickListener {
     private static final String TAG = ClientActivity.class.getSimpleName();
-
-    //服务器发送开始录音指令
-    public static final int MSG_ORDER_START_RECORD = 0x661;
-    //服务器发送停止录音指令
-    public static final int MSG_ORDER_STOP_RECORD = 0x662;
-    //服务器发送删除录音指令
-    public static final int MSG_ORDER_DELETE_RECORD_FILE = 0x663;
-    //服务器发送录音文件指令
-    public static final int MSG_ORDER_START_SEND_BACK = 0x664;
-    //客户端开始发送录音文件信息指令
-    public static final int MSG_ORDER_START_SEND_FILEINFO_BACK = 0x665;
-    //服务器发送开始发送录音文件
-    public static final int MSG_START_SEND_FILE_BACK = 0x666;
-    //客户端发送录音文件成功
-    public static final int MSG_SEND_FILE_SUCCEECE = 0x667;
-    //客户端发送录音文件失败
-    public static final int MSG_SEND_FILE_FAILED = 0x668;
-    //服务器接收录音文件成功
-    public static final int MSG_ORDER_RECEIVE_FILE_SUCCEECE = 0x669;
-    //服务器接收录音文件失败
-    public static final int MSG_ORDER_RECEIVE_FILE_FAILED = 0x670;
 
     private ListView mLvMsgs;
 
@@ -53,7 +43,6 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
 
     private String deviceName;
     private String clientIp;
-    private String serverIp;
     private int order;
 
     private Handler clientHandler;
@@ -76,7 +65,7 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
         deviceName = new Build().MODEL;
 
         Intent i = getIntent();
-        serverIp = i.getStringExtra("serverIp");
+        clientIp = i.getStringExtra("clientIp");
         app = (WifiApplication) this.getApplication();
         initClientHandler();
         initClientListener();
@@ -86,7 +75,7 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
         if (app.client == null) {
             return;
         }
-        Log.d(TAG, "into initClientListener() app client =" + app.client);
+        Log.d(TAG, "into initClientListener() app client ");
         app.client.setClientMsgListener(new SocketClient.ClientMsgListener() {
             Message msg = null;
 
@@ -120,12 +109,9 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
                 String text = (String) msg.obj;
                 gson = new Gson();
                 ChatMessage chatMsg = gson.fromJson(text, ChatMessage.class);
-                String servergetbyserverIP = chatMsg.getNetAddress();
                 chatMessages.add(chatMsg);
                 adapter.refreshDeviceList(chatMessages);
-
-                Log.d(TAG, "message = " + chatMsg+ servergetbyserverIP);
-                //客户器端获取命令后完成响应操作
+                  //客户器端获取命令后完成响应操作
                 try {
                     clientOperation(chatMsg);
                 } catch (IOException e) {
@@ -143,12 +129,12 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
         order = chatMsg.getOrder();
 
         switch (order) {
-            case MSG_ORDER_START_RECORD:
+            case ORDER_START_RECORD:
                 mRecorder = new Recorder(this, frequency, format);
                 mRecorder.startRecord();
                 Log.d(TAG, "click startRecording");
                 break;
-            case MSG_ORDER_STOP_RECORD:
+            case ORDER_STOP_RECORD:
                 if (mRecorder != null) {
                     mRecorder.stopRecord();
                 } else {
@@ -156,7 +142,7 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
                 }
                 Log.d(TAG, "click stopRecord");
                 break;
-            case MSG_ORDER_DELETE_RECORD_FILE:
+            case ORDER_DELETE_RECORD_FILE:
                 if (mRecorder != null) {
                     mRecorder.deleteFile();
                 } else {
@@ -164,12 +150,12 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
                 }
                 Log.d(TAG, "click deleteFile");
                 break;
-            case MSG_ORDER_START_SEND_BACK:
+            case ORDER_START_SEND_BACK:
                 if (mRecorder != null) {
                     if (mRecorder.isCompleted()) {
                         //存在录音文件的情况下，client发送文件信息到server
                         mFileInfo = mRecorder.getAudioFileInfo();
-                        order = MSG_ORDER_START_SEND_FILEINFO_BACK;
+                        order = MSG_START_SEND_FILEINFO_BACK;
                         gsonFile = new Gson();
                         String str = gsonFile.toJson(mFileInfo);
                         sendChatMsg(structChatMessage(str));
@@ -179,23 +165,26 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
                 }
                 Log.d(TAG, "click sendRecordFileBack");
                 break;
-            case MSG_START_SEND_FILE_BACK:
-                //停止发送消息并发送文件
-                app.client.sendFile(mFileInfo);
-//                if (complet){
-////                    app.client.restartSendingMessage();
-//                    order = MSG_SEND_FILE_SUCCEECE;
-//                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send succeed"));
-//                }else {
-//                    order = MSG_SEND_FILE_FAILED;
-//                    sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send failed"));
-//                }
+            case ORDER_START_SEND_FILE_BACK:
+//                停止发送消息并发送文件
+                if (app.client != null){
+                    Boolean sendFileComplet =  app.client.sendFile(mFileInfo);
+                    if (sendFileComplet){
+                        order = MSG_SEND_FILE_SUCCEECE;
+                        Log.d(TAG, "MSG_SEND_FILE_SUCCEECE");
+                        sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send succeed"));
+                    }else {
+                        order = MSG_SEND_FILE_FAILED;
+                        Log.d(TAG, "MSG_SEND_FILE_FAILED");
+                        sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send failed"));
+                    }
+                }
                 break;
 
-            case MSG_ORDER_RECEIVE_FILE_SUCCEECE:
+            case ORDER_RECEIVE_FILE_SUCCEECE:
 
                 break;
-            case MSG_ORDER_RECEIVE_FILE_FAILED:
+            case ORDER_RECEIVE_FILE_FAILED:
 
                 break;
             default:
@@ -206,14 +195,13 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
 
     private void initUi() {
         mLvMsgs = (ListView) this.findViewById(R.id.lv_chat);
-        findViewById(R.id.btn_refresh).setOnClickListener(this);
         adapter = new ChatAdapter(this, chatMessages);
         mLvMsgs.setAdapter(adapter);
     }
 
     @Override
     public void onClick(View v) {
-        sendChatMsg(structChatMessage("刷新"));
+
     }
 
     /**
@@ -233,10 +221,12 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
 
         ChatMessage msg = new ChatMessage();
         msg.setDeviceName(deviceName);
-        msg.setNetAddress(serverIp);
+        msg.setNetAddress(clientIp);
         msg.setOrder(order);
         msg.setMsg(text);
 //        msg.setMsgTime(strTime);
+        chatMessages.add(msg);
+        adapter.refreshDeviceList(chatMessages);
         gson = new Gson();
         return gson.toJson(msg);
     }
