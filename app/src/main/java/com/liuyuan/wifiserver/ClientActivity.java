@@ -168,16 +168,8 @@ public class ClientActivity extends AppCompatActivity implements View.OnClickLis
             case ORDER_START_SEND_FILE_BACK:
 //                停止发送消息并发送文件
                 if (app.client != null){
-                    Boolean sendFileComplet =  app.client.sendFile(mFileInfo);
-                    if (sendFileComplet){
-                        order = MSG_SEND_FILE_SUCCEECE;
-                        Log.d(TAG, "MSG_SEND_FILE_SUCCEECE");
-                        sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send succeed"));
-                    }else {
-                        order = MSG_SEND_FILE_FAILED;
-                        Log.d(TAG, "MSG_SEND_FILE_FAILED");
-                        sendChatMsg(structChatMessage(mFileInfo.getFileName() + " send failed"));
-                    }
+                    app.client.sendFile(mFileInfo);
+
                 }
                 break;
 

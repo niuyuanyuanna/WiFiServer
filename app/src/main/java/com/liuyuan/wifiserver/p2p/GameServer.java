@@ -1,21 +1,28 @@
 package com.liuyuan.wifiserver.p2p;
 
+import android.os.Build;
 import android.util.Log;
 
 import com.liuyuan.wifiserver.ServerMainActivity;
 import com.liuyuan.wifiserver.WifiApplication;
 import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.model.FileInfo;
+import com.liuyuan.wifiserver.utils.FileUtils;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -29,14 +36,21 @@ public class GameServer {
     public ServerMainActivity mContext;
 
     private static HashMap<String, Socket> socketHashMap = new HashMap<>();
-    private static HashMap<Socket,Boolean> socketIsReceFileHashMap = new HashMap<>();
 
     private ServerSocket mServerSocket;
     private int mPort;
     private BufferedReader in;
+    private InputStream mInputStream;
 
     private ServerMsgListener mServerMsgListener;
     private FileReceiver mFileReceiver;
+    /**
+     * 用来控制发送文件线程暂停、恢复
+     */
+    private final Object LOCK = new Object();
+    private boolean mIsPause = false;
+    //文件大小不超过4M
+    private static final int BYTE_SIZE_DATA = 1024 * 4;
 
     //flag if got to listen
     private boolean onGoinglistner = true;
@@ -65,7 +79,7 @@ public class GameServer {
     /**
      * init server to listen
      **/
-    public void beginListenandAcceptMsg() {
+    public void beginListenandSaveSocket() {
 
         new Thread(new Runnable() {
             @Override
@@ -83,19 +97,19 @@ public class GameServer {
                     while (onGoinglistner) {
                         try {
                             Socket socket = mServerSocket.accept();
-                            if (socket != null) {
+                            if (socket != null && onGoinglistner) {
                                 if (!socketHashMap.containsValue(socket)) {
                                     String deviceip = null;
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+                                    Log.d(TAG, "socket.getRemoteSocketAddress()=" + socket.getRemoteSocketAddress().toString());
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                                         deviceip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getHostString();
                                     }
                                     Log.d(TAG, "device ip ===================" + deviceip);
                                     socketHashMap.put(deviceip, socket);
-                                    socketIsReceFileHashMap.put(socket,false);
+
                                 }
-                                serverAcceptClientMsg(socket);
                             }
-                        } catch (IOException | InterruptedException e) {
+                        } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }
@@ -107,35 +121,34 @@ public class GameServer {
     /**
      * accept from socket msg
      */
-    private void serverAcceptClientMsg(final Socket socket) throws InterruptedException {
+    public void serverAcceptClientMsg() throws InterruptedException {
         Log.d(TAG, "into serverAcceptClientMsg" + mServerSocket);
         new Thread(new Runnable() {
             @Override
             public void run() {
-                while (!socket.isClosed() && !socketIsReceFileHashMap.get(socket)) {
-                    try {
-                        //接收客户端消息
-                        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-                        char[] buffer = new char[1];
-                        in.read(buffer,0,1);
-                        if (buffer[0] == 'm'){
-                            String str = in.readLine();
-                            if (str == null || str.equals("")) {
-                                break;
+                for (HashMap.Entry<String, Socket> entry : socketHashMap.entrySet()) {
+                    Socket socket = entry.getValue();
+                    if (socket != null && socket.isConnected()) {
+                        while (onGoinglistner) {
+                            try {
+                                //接收客户端消息
+                                mInputStream = socket.getInputStream();
+                                in = new BufferedReader(new InputStreamReader(mInputStream, "UTF-8"));
+                                String str = in.readLine();
+                                if (str == null || str.equals("")) {
+                                    break;
+                                }
+                                if (onGoinglistner){
+                                    mServerMsgListener.handlerHotMsg(str);
+                                }
+
+                            } catch (Exception e) {
+                                e.printStackTrace();
                             }
-                            Log.d(TAG, "into handle message in the UI xiancheng " + str);
-                            mServerMsgListener.handlerHotMsg(str);
-                        }else {
-                            //接收文件
-
-
-
                         }
-                    } catch (Exception e) {
-                        e.printStackTrace();
                     }
-                }
 
+                }
             }
         }).start();
 
@@ -146,42 +159,68 @@ public class GameServer {
      *
      * @param fileInfo
      */
-    public void beginAcceptFile(FileInfo fileInfo,String deviceip) throws InterruptedException {
+    public void beginAcceptFile(final FileInfo fileInfo, final String deviceip) throws InterruptedException {
 
         final Socket acceptSocket = socketHashMap.get(deviceip);
         if (acceptSocket != null && acceptSocket.isConnected()) {
-            socketIsReceFileHashMap.put(acceptSocket,true);
-
             Log.d(TAG, "beginAcceptFile acceptSocket:" + acceptSocket);
-            mFileReceiver = new FileReceiver(acceptSocket, fileInfo);
-            //加入线程池执行
-            mFileReceiverList.add(mFileReceiver);
-            mFileReceiver.setOnReceiveListener(new FileReceiver.OnReceiveListener() {
+            Thread fileReceiveThread = new Thread(new Runnable() {
                 @Override
-                public void onStart() {
-                    Log.d(TAG, "on Start.......................................");
-                }
+                public void run() {
+                    try {
+                        mInputStream = acceptSocket.getInputStream();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.d(TAG, "FileReceive init() --------------------->>> occur expection");
+                    }
 
-                @Override
-                public void onProgress(FileInfo fileInfo, long progress, long total) {
-                }
+                    try {
+                        long fileSize = fileInfo.getSize();
+                        OutputStream fos = null;
+                        fos = new FileOutputStream(FileUtils.gerateLocalFile(fileInfo.getFilePath()));
 
-                @Override
-                public void onSuccess(FileInfo fileInfo) {
+                        byte[] bytes = new byte[BYTE_SIZE_DATA];
+                        long total = 0;
+                        int len = 0;
 
-                    socketIsReceFileHashMap.put(acceptSocket,false);
-                    Log.d(TAG, "receive file" + fileInfo.getFileName() + "succeed !!!!!!!");
+                        long sTime = System.currentTimeMillis();
+                        long eTime = 0;
+                        while ((len = mInputStream.read(bytes)) != -1) {
+                            synchronized (LOCK) {
+                                if (mIsPause) {
+                                    try {
+                                        LOCK.wait();
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
 
-                }
+                                //写入文件
+                                fos.write(bytes, 0, len);
+                                total = total + len;
 
-                @Override
-                public void onFailure(Throwable throwable, FileInfo fileInfo) {
-                    socketIsReceFileHashMap.put(acceptSocket,false);
-                    Log.d(TAG, "receive file" + fileInfo.getFileName() + "failed !!!!!!!");
+                                //每隔200毫秒返回一次进度
+                                eTime = System.currentTimeMillis();
+                                if (eTime - sTime > 200) {
+                                    sTime = eTime;
+                                    Log.d(TAG, "progress:" + total + "..........total:" + fileSize);
+                                }
+                            }
+                        }
+                        socketHashMap.remove(deviceip);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.d(TAG, "FileReceive parsebody() --------------------->>> occur expection");
+                    }
+
+                    socketHashMap.remove(deviceip);
+                    if (socketHashMap == null) {
+                        beginListenandSaveSocket();
+                    }
 
                 }
             });
-            WifiApplication.MAIN_EXECUTOR.execute(mFileReceiver);
+            WifiApplication.MAIN_EXECUTOR.execute(fileReceiveThread);
         }
     }
 
@@ -229,12 +268,11 @@ public class GameServer {
             if (!client.isOutputShutdown()) {
                 try {
                     out = new PrintWriter(client.getOutputStream());
-                    out.print('m');
                     out.println(chatMsg);
                     out.flush();
-                 } catch (IOException e) {
+                } catch (IOException e) {
                     e.printStackTrace();
-                    Log.d(TAG, "sendMsg()"+chatMsg+" fail!");
+                    Log.d(TAG, "sendMsg()" + chatMsg + " fail!");
                 }
             }
         }
@@ -267,6 +305,6 @@ public class GameServer {
 
     public void stopListener() {
         onGoinglistner = false;
+        Log.d(TAG, "stopListener onGoinglistener = " + onGoinglistner);
     }
-
 }

@@ -147,15 +147,18 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
     private void serverOperation(ChatMessage chatMsg) throws InterruptedException {
        switch (chatMsg.getOrder()){
            case MSG_START_SEND_FILEINFO_BACK:
+               app.server.stopListener();
                String str = chatMsg.getMsg();
                String deviceip = chatMsg.getNetAddress();
                String clientName = chatMsg.getDeviceName();
                Log.d(TAG,"serverOperation : the clientip = "+ deviceip);
                mFileInfo = new Gson().fromJson(str, FileInfo.class);
                if (mFileInfo != null){
+
                    fileInfoHashMap.put(deviceip,mFileInfo);
                    order = ORDER_START_SEND_FILE_BACK;
                    sendChatMsgToTheClient(structChatMessage(clientName+ "please start send file"),deviceip);
+
                    app.server.beginAcceptFile(mFileInfo,deviceip);
                }
                break;
@@ -216,6 +219,11 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
                 order = ORDER_START_SEND_BACK;
                 strMsg = "send file back";
                 sendChatMsg(structChatMessage(strMsg));
+                try {
+                    app.server.serverAcceptClientMsg();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 break;
 
             default:

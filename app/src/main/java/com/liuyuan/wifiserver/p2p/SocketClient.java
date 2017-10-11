@@ -8,11 +8,18 @@ import com.liuyuan.wifiserver.constant.Global;
 import com.liuyuan.wifiserver.model.FileInfo;
 import com.liuyuan.wifiserver.utils.FileUtils;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,19 +36,20 @@ public class SocketClient {
     private int port;
 
     private BufferedReader in;
+    private BufferedOutputStream mBufferedOutputStream;
 
     private ClientMsgListener mClientMsgListener;
     //flag if got to listen
     private boolean onGoinglistner = true;
 
-    private FileSender mFileSender;
 
     /**
-     * 发送文件线程列表数据
+     * 用来控制发送文件线程暂停、恢复
      */
-    private List<FileSender> mFileSenderList = new ArrayList<>();
-
-    private Boolean sendFileSucceed;
+    private final Object LOCK = new Object();
+    private boolean mIsPause;
+    //文件大小不超过4M
+    private static final int BYTE_SIZE_DATA = 1024 * 4;
 
     /**********************************game****************************************/
     public static synchronized SocketClient newInstance(ClientMainActivity mContext, String site, int port,
@@ -143,39 +151,63 @@ public class SocketClient {
     }
 
     //send file to GameServer
-    public Boolean sendFile(final FileInfo fileInfo) {
+    public void sendFile(final FileInfo fileInfo) {
         Log.i(TAG, "into sendFile()  file:" + fileInfo.toString());
-        if (client != null && client.isConnected()) {
-            mFileSender = new FileSender(mContext, client, fileInfo);
-            //添加到线程池执行
-            mFileSenderList.add(mFileSender);
-            WifiApplication.FILE_SENDER_EXECUTOR.execute(mFileSender);
-            mFileSender.setOnSendListener(new FileSender.OnSendListener() {
-                @Override
-                public void onStart() {
-                    Log.d(TAG, "on Start.......................................");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (client != null && client.isConnected()){
+                    try {
+                        client.setSoTimeout(30 * 1000);
+                        OutputStream os = client.getOutputStream();
+                        mBufferedOutputStream = new BufferedOutputStream(os);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.d(TAG,"FileSender init() --------------------->>> occur expection");
+                    }
+
+
+                    try {
+                        long fileSize = fileInfo.getSize();
+                        File file = new File(fileInfo.getFilePath());
+                        InputStream fis = new FileInputStream(file);
+                        int len = 0;
+                        long total = 0;
+                        byte[] bytes = new byte[BYTE_SIZE_DATA];
+                        long sTime = System.currentTimeMillis();
+                        long eTime = 0;
+                        while ((len = fis.read(bytes)) != -1) {
+                            synchronized (LOCK) {
+                                if(mIsPause) {
+                                    try {
+                                        LOCK.wait();
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+
+                                //写入文件
+                                mBufferedOutputStream.write(bytes, 0, len);
+                                total += len;
+
+                                //每隔200毫秒返回一次进度
+                                eTime = System.currentTimeMillis();
+                                if(eTime - sTime > 200) {
+                                    sTime = eTime;
+                                    Log.d(TAG,"progress:"+total+ "..........total:"+fileSize );
+                                }
+                            }
+                        }
+                        mBufferedOutputStream.flush();
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.d(TAG,"FileSender parseBody() ------->>> occur expection");
+                    }
+
                 }
-
-                @Override
-                public void onProgress(long progress, long total) {
-
-                }
-
-                @Override
-                public void onSuccess(FileInfo fileInfo) {
-                    sendFileSucceed = true;
-                    Log.d(TAG, "send file" + fileInfo.getFileName() + "succeed !!!!!!!");
-
-                }
-
-                @Override
-                public void onFailure(Throwable throwable, FileInfo fileInfo) {
-                    sendFileSucceed = false;
-                    Log.d(TAG, "send file" + fileInfo.getFileName() + "failed !!!!!!!" + throwable);
-                }
-            });
-        }
-        return sendFileSucceed;
+            }
+        }).start();
     }
 
     public void setClientMsgListener(ClientMsgListener mClientMsgListener) {
@@ -189,6 +221,14 @@ public class SocketClient {
     }
 
     public void closeConnection() {
+        if(mBufferedOutputStream != null) {
+            try {
+                mBufferedOutputStream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
         try {
             if (client != null && client.isConnected()) {
                 client.close();
