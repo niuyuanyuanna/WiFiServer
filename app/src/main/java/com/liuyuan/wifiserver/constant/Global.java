@@ -9,7 +9,7 @@ public class Global {
 	public static String PASSWORD = "12345678";
 	public static String HOTPOT_NAME = "WIFI-HOT-TEST";
 
-	public static int PORT = 8284;
+	public static int PORT = 8482;
 
 
 	public static String INT_SERVER_FAIL = "INTSERVER_FAIL";

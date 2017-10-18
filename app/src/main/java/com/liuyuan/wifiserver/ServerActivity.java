@@ -219,11 +219,7 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
                 order = ORDER_START_SEND_BACK;
                 strMsg = "send file back";
                 sendChatMsg(structChatMessage(strMsg));
-                try {
-                    app.server.serverAcceptClientMsg();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+
                 break;
 
             default:

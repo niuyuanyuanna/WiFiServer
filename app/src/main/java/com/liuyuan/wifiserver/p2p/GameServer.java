@@ -37,13 +37,13 @@ public class GameServer {
 
     private static HashMap<String, Socket> socketHashMap = new HashMap<>();
 
+
     private ServerSocket mServerSocket;
     private int mPort;
     private BufferedReader in;
     private InputStream mInputStream;
 
     private ServerMsgListener mServerMsgListener;
-    private FileReceiver mFileReceiver;
     /**
      * 用来控制发送文件线程暂停、恢复
      */
@@ -54,6 +54,7 @@ public class GameServer {
 
     //flag if got to listen
     private boolean onGoinglistner = true;
+    private HashMap<Socket, Boolean> socketAcceptFile = new HashMap<>();
 
     /**
      * 接收文件线程列表数据
@@ -95,17 +96,19 @@ public class GameServer {
                     while (onGoinglistner) {
                         try {
                             Socket socket = mServerSocket.accept();
-                            if (socket != null ) {
+                            if (socket != null) {
                                 String deviceip = null;
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                                     deviceip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getHostString();
                                     if (!socketHashMap.containsKey(deviceip)) {
                                         socketHashMap.put(deviceip, socket);
+                                        socketAcceptFile.put(socket, false);
                                         Log.d(TAG, "deviceip ===================" + deviceip);
+                                        serverAcceptClientMsg(socket);
                                     }
                                 }
                             }
-                        } catch (IOException e) {
+                        } catch (IOException | InterruptedException e) {
                             e.printStackTrace();
                         }
                     }
@@ -117,37 +120,49 @@ public class GameServer {
     /**
      * accept from socket msg
      */
-    public void serverAcceptClientMsg() throws InterruptedException {
+    public void serverAcceptClientMsg(final Socket socket) throws InterruptedException {
         Log.d(TAG, "into serverAcceptClientMsg" + mServerSocket);
         new Thread(new Runnable() {
             @Override
             public void run() {
-                for (HashMap.Entry<String, Socket> entry : socketHashMap.entrySet()) {
-                    Socket socket = entry.getValue();
-                    if (socket != null && socket.isConnected()) {
-                        while (onGoinglistner) {
+                if (socket != null && socket.isConnected()) {
+                    while (onGoinglistner) {
+                        if (!socketAcceptFile.get(socket)) {
+                            //未接受文件时,接受消息
                             try {
-                                //接收客户端消息
                                 mInputStream = socket.getInputStream();
                                 in = new BufferedReader(new InputStreamReader(mInputStream, "UTF-8"));
                                 String str = in.readLine();
                                 if (str == null || str.equals("")) {
                                     break;
                                 }
-                                if (onGoinglistner){
+                                if (!socketAcceptFile.get(socket)) {
                                     mServerMsgListener.handlerHotMsg(str);
                                 }
 
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }
+                        } else {
+                            //正在接受文件
+                            Log.d(TAG, "server accepting file...");
+                            break;
                         }
+
                     }
 
                 }
             }
         }).start();
 
+    }
+
+    //接受文件完成后重新监听消息
+    public void restartAcceptMsg(String deviceip) {
+        Socket socket = socketHashMap.get(deviceip);
+        if (socketAcceptFile.get(socket)) {
+            socketAcceptFile.put(socket, false);
+        }
     }
 
     /**
@@ -158,65 +173,72 @@ public class GameServer {
     public void beginAcceptFile(final FileInfo fileInfo, final String deviceip) throws InterruptedException {
 
         final Socket acceptSocket = socketHashMap.get(deviceip);
-        if (acceptSocket != null && acceptSocket.isConnected()) {
-            Log.d(TAG, "beginAcceptFile acceptSocket:" + acceptSocket);
-            Thread fileReceiveThread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        mInputStream = acceptSocket.getInputStream();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        Log.d(TAG, "FileReceive init() --------------------->>> occur expection");
-                    }
+        if (socketAcceptFile != null && !socketAcceptFile.get(acceptSocket)) {
+            socketAcceptFile.put(acceptSocket, true);
 
-                    try {
-                        long fileSize = fileInfo.getSize();
-                        OutputStream fos = null;
-                        fos = new FileOutputStream(FileUtils.gerateLocalFile(fileInfo.getFilePath()));
+            if (acceptSocket != null && acceptSocket.isConnected()) {
+                Log.d(TAG, "beginAcceptFile acceptSocket:" + acceptSocket);
+                Thread fileReceiveThread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            mInputStream = acceptSocket.getInputStream();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            Log.d(TAG, "FileReceive init() --------------------->>> occur expection");
+                        }
 
-                        byte[] bytes = new byte[BYTE_SIZE_DATA];
-                        long total = 0;
-                        int len = 0;
+                        try {
+                            long fileSize = fileInfo.getSize();
+                            OutputStream fos = null;
+                            fos = new FileOutputStream(FileUtils.gerateLocalFile(fileInfo.getFilePath()));
 
-                        long sTime = System.currentTimeMillis();
-                        long eTime = 0;
-                        while ((len = mInputStream.read(bytes)) != -1) {
-                            synchronized (LOCK) {
-                                if (mIsPause) {
-                                    try {
-                                        LOCK.wait();
-                                    } catch (InterruptedException e) {
-                                        e.printStackTrace();
+                            byte[] bytes = new byte[BYTE_SIZE_DATA];
+                            long total = 0;
+                            int len = 0;
+
+                            long sTime = System.currentTimeMillis();
+                            long eTime = 0;
+                            while ((len = mInputStream.read(bytes)) != -1) {
+                                synchronized (LOCK) {
+                                    if (mIsPause) {
+                                        try {
+                                            LOCK.wait();
+                                        } catch (InterruptedException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+
+                                    //写入文件
+                                    fos.write(bytes, 0, len);
+                                    total = total + len;
+
+                                    //每隔200毫秒返回一次进度
+                                    eTime = System.currentTimeMillis();
+                                    if (eTime - sTime > 200) {
+                                        sTime = eTime;
+                                        Log.d(TAG, "progress:" + total + "..........total:" + fileSize);
                                     }
                                 }
-
-                                //写入文件
-                                fos.write(bytes, 0, len);
-                                total = total + len;
-
-                                //每隔200毫秒返回一次进度
-                                eTime = System.currentTimeMillis();
-                                if (eTime - sTime > 200) {
-                                    sTime = eTime;
-                                    Log.d(TAG, "progress:" + total + "..........total:" + fileSize);
-                                }
                             }
+                            //重新接受消息
+                            restartAcceptMsg(deviceip);
+//                            socketHashMap.remove(deviceip);
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            Log.d(TAG, "FileReceive parsebody() --------------------->>> occur expection");
                         }
-                        socketHashMap.remove(deviceip);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        Log.d(TAG, "FileReceive parsebody() --------------------->>> occur expection");
-                    }
 
-                    socketHashMap.remove(deviceip);
-                    if (socketHashMap == null) {
-                        beginListenandSaveSocket();
-                    }
+//                        socketHashMap.remove(deviceip);
+                        if (socketHashMap == null) {
+                            beginListenandSaveSocket();
+                        }
 
-                }
-            });
-            WifiApplication.MAIN_EXECUTOR.execute(fileReceiveThread);
+                    }
+                });
+                WifiApplication.MAIN_EXECUTOR.execute(fileReceiveThread);
+            }
         }
     }
 
@@ -279,6 +301,7 @@ public class GameServer {
         public void handlerErrorMsg(String errorMsg);
 
         public void handlerHotMsg(String hotMsg);
+
     }
 
     public void setServerMsgListener(ServerMsgListener mServerMsgListener) {
