@@ -58,8 +58,6 @@ public class GameServer {
     /**
      * 接收文件线程列表数据
      */
-    private List<FileReceiver> mFileReceiverList = new ArrayList<>();
-
     public static synchronized GameServer newInstance(ServerMainActivity mContext, int port,
                                                       ServerMsgListener serverMsgListener) {
         if (null == instance) {
@@ -97,16 +95,14 @@ public class GameServer {
                     while (onGoinglistner) {
                         try {
                             Socket socket = mServerSocket.accept();
-                            if (socket != null && onGoinglistner) {
-                                if (!socketHashMap.containsValue(socket)) {
-                                    String deviceip = null;
-                                    Log.d(TAG, "socket.getRemoteSocketAddress()=" + socket.getRemoteSocketAddress().toString());
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                                        deviceip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getHostString();
+                            if (socket != null ) {
+                                String deviceip = null;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                    deviceip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getHostString();
+                                    if (!socketHashMap.containsKey(deviceip)) {
+                                        socketHashMap.put(deviceip, socket);
+                                        Log.d(TAG, "deviceip ===================" + deviceip);
                                     }
-                                    Log.d(TAG, "device ip ===================" + deviceip);
-                                    socketHashMap.put(deviceip, socket);
-
                                 }
                             }
                         } catch (IOException e) {

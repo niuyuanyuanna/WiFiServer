@@ -147,7 +147,7 @@ public class ServerActivity extends Activity implements OnClickListener, Adapter
     private void serverOperation(ChatMessage chatMsg) throws InterruptedException {
        switch (chatMsg.getOrder()){
            case MSG_START_SEND_FILEINFO_BACK:
-               app.server.stopListener();
+//               app.server.stopListener();
                String str = chatMsg.getMsg();
                String deviceip = chatMsg.getNetAddress();
                String clientName = chatMsg.getDeviceName();
